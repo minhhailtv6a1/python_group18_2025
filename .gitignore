@@ -1,0 +1,6 @@
+.venv/
+*.pyc
+__pycache__/
+*.log
+.venv.rar
+sample_for_test/video/
