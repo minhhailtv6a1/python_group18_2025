@@ -78,10 +78,11 @@ def updateErrorWrapLength(frm_mid, error_label):
 cap = None  
 update_task = None  
 camera_label = None  
+detect_closed = False
 
 # Hàm nhận diên qua camera
 def detect_camera(frm_mid):  
-    global camera_label, cap, update_task  # Thêm biến toàn cục  
+    global camera_label, cap, update_task, detect_closed  # Thêm biến toàn cục  
 
     # Nếu camera đang mở, dừng lại trước khi mở lại  
     if cap is not None:  
@@ -102,7 +103,12 @@ def detect_camera(frm_mid):
         return  
 
     def update_frame():  
-        global update_task  # Biến lưu task after()  
+        global update_task, detect_closed  # Biến lưu task after()  
+
+        # Kiểm tra nếu tắt camera thì ko detect nữa
+        if detect_closed:
+            detect_closed = False
+            return
 
         start_time = time.time()  
         ret, frame = cap.read()  
@@ -152,9 +158,9 @@ def detect_camera(frm_mid):
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)  
 
         # Tính FPS  
-        fps = 1.0 / (time.time() - start_time)  
-        cv2.putText(frame, f"FPS: {fps:.2f}", (50, 100),   
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)  
+        # fps = 1.0 / (time.time() - start_time)  
+        # cv2.putText(frame, f"FPS: {fps:.2f}", (50, 100),   
+        #             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)  
 
         # Hiển thị trên Tkinter  
         img = Image.fromarray(frame)  
@@ -177,14 +183,43 @@ def detect_camera(frm_mid):
 
 # Hàm reset frm_mid để hình default
 def close_camera_video_img(frm_mid, imgPath):
-    global processed_results, tk_img, tk_original_img, video_label
-    processed_results, tk_img, tk_original_img, video_label = None, None, None, None
-
+    global detect_closed
+    # global processed_results, tk_img, tk_original_img, video_label, detect_closed
+    # processed_results, tk_img, tk_original_img, video_label = None, None, None, None
+    
     # Xóa nội dung cũ trong `frm_mid`  
     for widget in frm_mid.winfo_children():  
         widget.destroy()  
-    del processed_results, tk_img, tk_original_img, video_label
+    # del processed_results, tk_img, tk_original_img, video_label
 
+    # Tắt cam
+    if cap is not None:
+        cap.release()
+        cv2.destroyAllWindows()
+    # Cập nhật biến để xác nhận đã tắt cam
+    detect_closed = True
+    
+    # Hiển thị camera
+    global camera_img
+    camera_img = tk.PhotoImage(file=imgPath)
+
+    frm_mid.rowconfigure(0, weight=1)
+    frm_mid.rowconfigure(1, weight=0)
+    frm_mid.columnconfigure(0, weight=1)
+    frm_mid.columnconfigure(1, weight=0)
+
+    camera_lbl = tk.Label(master=frm_mid, image=camera_img)
+    camera_lbl.grid(row=0, column=0, sticky="nsew")
+
+def close_img(frm_mid, imgPath):
+    global processed_results, tk_img, tk_original_img, detect_closed
+    processed_results, tk_img, tk_original_img = None, None, None
+    
+    # Xóa nội dung cũ trong `frm_mid`  
+    for widget in frm_mid.winfo_children():  
+        widget.destroy()  
+    del processed_results, tk_img, tk_original_img
+    
     # Hiển thị camera
     global camera_img
     camera_img = tk.PhotoImage(file=imgPath)
@@ -232,6 +267,7 @@ def create_camera_window(window, title, width, height, original_x, original_y,is
 
     # Xử lý khi quay về cửa sổ chính
     def back_to_main_window():
+        global detect_closed
     # Lấy thông tin cửa sổ con
         new_window.update_idletasks()
         if new_window.state() == "zoomed":
@@ -244,6 +280,8 @@ def create_camera_window(window, title, width, height, original_x, original_y,is
             # Thêm thời gian chờ trước khi hiển thị lại cửa sổ chính
             window.after(0, lambda: window.geometry(f"{new_window_width}x{new_window_height}+{new_window_x}+{new_window_y}"))
 
+        close_camera_video_img(frm_mid, "img/frm_camera.png")
+        detect_closed = False
         new_window.destroy()
 
         window.deiconify()
@@ -337,7 +375,7 @@ def openVideoFile(frm_mid):
 
 # Hàm nhận diện qua video
 def detect_video(frm_mid):
-    global video_label  # Label để hiển thị video
+    global video_label, detect_closed  # Label để hiển thị video
     detector = FER()
 
     filePath = openVideoFile(frm_mid)
@@ -357,6 +395,13 @@ def detect_video(frm_mid):
     rotation = cap.get(cv2.CAP_PROP_ORIENTATION_META) # Hoặc các thuộc tính tương tự
 
     def update_frame():
+        global video_label, detect_closed
+
+    # # Kiểm tra nếu bấm xóa video thì dừng lại
+    # if detect_closed:
+    #     detect_closed = False
+    #     return
+
         start_time = time.time()
         ret, frame = cap.read()
         if not ret:
@@ -400,14 +445,15 @@ def detect_video(frm_mid):
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         # Tính FPS
-        fps = 1.0 / (time.time() - start_time)
-        cv2.putText(frame, f"FPS: {fps:.2f}", (50, 100), 
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        # fps = 1.0 / (time.time() - start_time)
+        # cv2.putText(frame, f"FPS: {fps:.2f}", (50, 100), 
+        #             cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
         # Hiển thị trên Tkinter
         img = Image.fromarray(frame)
         img_tk = ImageTk.PhotoImage(image=img)
 
+        # video_label = None
         video_label.config(image=img_tk)
         video_label.image = img_tk
 
@@ -456,6 +502,7 @@ def create_video_window(window, title, width, height, original_x, original_y, is
 
     # Hàm trở về cửa số chính
     def back_to_main_window():
+        global detect_closed
     # Lấy thông tin cửa sổ con
         new_window.update_idletasks()
         if new_window.state() == "zoomed":
@@ -468,6 +515,8 @@ def create_video_window(window, title, width, height, original_x, original_y, is
             # Thêm thời gian chờ trước khi hiển thị lại cửa sổ chính
             window.after(0, lambda: window.geometry(f"{new_window_width}x{new_window_height}+{new_window_x}+{new_window_y}"))
 
+        close_camera_video_img(frm_mid, "img/film.png")
+        detect_closed = False
         new_window.destroy()
 
         window.deiconify()
@@ -810,6 +859,7 @@ def create_img_window(window, title, width, height, original_x, original_y,is_ma
             window.after(0, lambda: window.geometry(f"{new_window_width}x{new_window_height}+{new_window_x}+{new_window_y}"))
 
         new_window.destroy()
+        # close_camera_video_img(frm_mid, "img/film.png")
 
         window.deiconify()
 
@@ -886,7 +936,7 @@ def create_img_window(window, title, width, height, original_x, original_y,is_ma
         text="Delete image",
         font=("Helvetica", 15),
         cursor= "hand2",
-        command= lambda: close_camera_video_img(frm_mid, "img/frm_img.png"),
+        command= lambda: close_img(frm_mid, "img/frm_img.png"),
     )
 
     btn_add_img.bind("<Enter>", lambda e: on_enter(btn_add_img, "SystemButtonFace", "#F4A460"))
